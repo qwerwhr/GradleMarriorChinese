@@ -138,6 +138,8 @@ allprojects { project ->
 //   3. doFirst 执行前拦截 + doLast 执行后修复生成文件，双保险
 // ============================================================
 
+// 阿里云 Gradle 镜像使用 v{版本号}/ 子目录结构（非扁平格式）
+// 正确: https://mirrors.aliyun.com/gradle/distributions/v9.6.1/gradle-9.6.1-bin.zip
 def GRADLE_DIST_MIRROR_PRIMARY   = 'https://mirrors.aliyun.com/gradle/distributions/'
 def GRADLE_DIST_ORIGINAL         = 'https://services.gradle.org/distributions/'
 def CURRENT_VERSION              = GradleVersion.current().version
@@ -154,11 +156,11 @@ def fixUrl = { raw ->
     // 域名替换
     url = url.replace(GRADLE_DIST_ORIGINAL, GRADLE_DIST_MIRROR_PRIMARY)
 
-    // 版本升级
+    // 版本升级（阿里云需 v{version}/ 子目录）
     def m = (url =~ /gradle-(\d+\.\d+(?:\.\d+)?)/)
     if (m.find() && m.group(1) != CURRENT_VERSION) {
         def type = url.contains('-all.zip') ? '-all.zip' : '-bin.zip'
-        url = "${GRADLE_DIST_MIRROR_PRIMARY}gradle-${CURRENT_VERSION}${type}"
+        url = "${GRADLE_DIST_MIRROR_PRIMARY}v${CURRENT_VERSION}/gradle-${CURRENT_VERSION}${type}"
         println "[镜像] wrapper 版本升级: ${m.group(1)} → ${CURRENT_VERSION}"
     }
     return url
