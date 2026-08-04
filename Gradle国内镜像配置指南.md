@@ -124,44 +124,70 @@ allprojects { project ->
 
 ### 3.2 `~/.gradle/init.d/wrapper-mirror.gradle`（Wrapper 镜像 + 版本自动跟随）
 
+> **镜像 URL 格式差异**：阿里云使用 `v{版本号}/` 子目录，清华 TUNA 使用扁平格式（与官方一致）。
+> 脚本自动识别镜像类型，切换镜像只需改一行配置。
+
+```
+阿里云:   https://mirrors.aliyun.com/gradle/distributions/v9.6.1/gradle-9.6.1-bin.zip
+清华 TUNA: https://mirrors.tuna.tsinghua.edu.cn/gradle/distributions/gradle-9.6.1-bin.zip
+官方:     https://services.gradle.org/distributions/gradle-9.6.1-bin.zip
+```
+
 ```groovy
 // ============================================================
 // Gradle Wrapper 分发下载镜像 + 版本自动同步（永久，新建/克隆项目均生效）
-// 阿里云镜像（主） + 清华 TUNA 镜像（备）
-//
-// 核心机制：
-//   GradleVersion.current().version  ← Gradle 内置 API，自动获取当前运行的版本号
-//
-// 效果：
-//   1. services.gradle.org → mirrors.aliyun.com（域名替换）
-//   2. gradle-9.5.0-bin.zip → gradle-9.6.1-bin.zip（版本自动升级）
-//   3. doFirst 执行前拦截 + doLast 执行后修复生成文件，双保险
+// 策略：
+//   1. services.gradle.org → 国内镜像
+//   2. 版本号自动跟随当前运行的 Gradle（如 9.5.0 → 9.6.1）
+//   3. 保留 bin/all 类型不变
+//   4. doFirst + doLast 双保险：执行前改 URL 防下载走外网，执行后修复生成的文件
+//   5. 自动识别镜像格式：
+//       阿里云需 v{version}/ 子目录:  v9.6.1/gradle-9.6.1-bin.zip
+//       清华 TUNA 用扁平格式:         gradle-9.6.1-bin.zip
 // ============================================================
 
-// 阿里云 Gradle 镜像使用 v{版本号}/ 子目录结构（非扁平格式）
-// 正确: https://mirrors.aliyun.com/gradle/distributions/v9.6.1/gradle-9.6.1-bin.zip
-def GRADLE_DIST_MIRROR_PRIMARY   = 'https://mirrors.aliyun.com/gradle/distributions/'
-def GRADLE_DIST_ORIGINAL         = 'https://services.gradle.org/distributions/'
-def CURRENT_VERSION              = GradleVersion.current().version
+def GRADLE_DIST_ORIGINAL = 'https://services.gradle.org/distributions/'
+def CURRENT_VERSION      = GradleVersion.current().version
+
+// ========== 镜像配置 ==========
+// 每个镜像: [baseUrl, useVSubdir]
+//   useVSubdir=true  → 阿里云格式: v9.6.1/gradle-9.6.1-bin.zip
+//   useVSubdir=false → 清华/官方格式: gradle-9.6.1-bin.zip
+//   切换镜像只需改下面一行：取消清华注释，注释阿里云
+
+def MIRROR = ['https://mirrors.aliyun.com/gradle/distributions/', true]
+// def MIRROR = ['https://mirrors.tuna.tsinghua.edu.cn/gradle/distributions/', false]
+
+def MIRROR_BASE     = MIRROR[0]  // 镜像根 URL
+def MIRROR_V_PREFIX = MIRROR[1]  // 是否需要 v{version}/ 子目录
 
 println "[镜像] wrapper-mirror.gradle 已加载 (系统 Gradle: ${CURRENT_VERSION})"
 
-// 公共：修复 distributionUrl（域名替换 + 版本升级）
+// ---------- 构造镜像 URL（自动选择正确格式）----------
+def buildMirrorUrl = { version, type ->
+    if (MIRROR_V_PREFIX) {
+        return "${MIRROR_BASE}v${version}/gradle-${version}${type}"   // 阿里云
+    } else {
+        return "${MIRROR_BASE}gradle-${version}${type}"               // 清华/官方
+    }
+}
+
+def extractType = { String url -> url.contains('-all.zip') ? '-all.zip' : '-bin.zip' }
+
+// ---------- 公共：修复 distributionUrl（域名替换 + 版本升级）----------
 // try-catch 兼容 String 和 Provider，避免 init script 类加载问题
 def fixUrl = { raw ->
     def url
     try { url = raw.get() } catch (Exception _) { url = raw }
     url = url.toString()
 
-    // 域名替换
-    url = url.replace(GRADLE_DIST_ORIGINAL, GRADLE_DIST_MIRROR_PRIMARY)
+    url = url.replace(GRADLE_DIST_ORIGINAL, MIRROR_BASE)
 
-    // 版本升级（阿里云需 v{version}/ 子目录）
     def m = (url =~ /gradle-(\d+\.\d+(?:\.\d+)?)/)
     if (m.find() && m.group(1) != CURRENT_VERSION) {
-        def type = url.contains('-all.zip') ? '-all.zip' : '-bin.zip'
-        url = "${GRADLE_DIST_MIRROR_PRIMARY}v${CURRENT_VERSION}/gradle-${CURRENT_VERSION}${type}"
-        println "[镜像] wrapper 版本升级: ${m.group(1)} → ${CURRENT_VERSION}"
+        def oldVer = m.group(1)
+        url = buildMirrorUrl(CURRENT_VERSION, extractType(url))
+        println "[镜像] wrapper 版本升级: ${oldVer} → ${CURRENT_VERSION}"
     }
     return url
 }
@@ -169,7 +195,6 @@ def fixUrl = { raw ->
 // ========== 1. 拦截 gradle wrapper（doFirst + doLast 双保险）==========
 gradle.rootProject {
     tasks.withType(Wrapper).configureEach { task ->
-        // 执行前：改 URL，防止下载走外网
         task.doFirst {
             def oldUrl = task.distributionUrl.toString()
             def newUrl = fixUrl(oldUrl)
@@ -178,14 +203,13 @@ gradle.rootProject {
                 println "[镜像] wrapper → 阿里云镜像, gradle-${CURRENT_VERSION}"
             }
         }
-        // 执行后：修复生成的 gradle-wrapper.properties（兜底）
         task.doLast {
             def propsFile = project.file('gradle/wrapper/gradle-wrapper.properties')
             if (propsFile.exists()) {
                 def props = new java.util.Properties()
                 propsFile.withInputStream { props.load(it) }
                 def url = props.getProperty('distributionUrl', '')
-                if (!url || url.contains('services.gradle.org')) {
+                if (!url || url.contains('services.gradle.org') || !url.contains(MIRROR_BASE.replace('https://',''))) {
                     def fixed = fixUrl(url ?: "${GRADLE_DIST_ORIGINAL}gradle-${CURRENT_VERSION}-bin.zip")
                     props.setProperty('distributionUrl', fixed.replace('https://', 'https\\://'))
                     propsFile.withOutputStream { props.store(it, null) }
