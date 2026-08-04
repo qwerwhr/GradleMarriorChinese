@@ -1,4 +1,4 @@
-建议直接给智能体，如openclaw，workbuddy，codebuddy，qclaw等让它们来处理，首先要配置你的Gradle环境变量，其次要把Gradle的安装路径给它，<br><br>
+建议直接把这个md文档喂给智能体，如openclaw，workbuddy，codebuddy，qclaw等让它们来处理，首先要配置你的Gradle环境变量，其次要把Gradle的安装路径给它，<br><br>
 这个是当你的Android Studio创建新的项目时，会处理你的系统级和项目级的冲突问题，镜像源我只给了清华源和阿里云源，当项目级和系统级的源配置<br><br>
 冲突时，会进行替换为系统级的源，匹配你的gradle的版本，同步修改项目上的版本，将其保持一致<br><br>
 以下为控制台信息仅供参考：<br><br>
