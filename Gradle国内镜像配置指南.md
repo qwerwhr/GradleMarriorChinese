@@ -1,4 +1,4 @@
-# Windows Gradle 国内镜像源配置完整指南
+# Gradle 国内镜像源配置完整指南
 
 > 适用版本：Gradle 9.6.1 | Android Studio 2026.1.2 | 更新时间：2026-08-04
 
@@ -154,9 +154,13 @@ def upgradeVersion = { String url ->
 }
 
 // ========== 1. gradle wrapper 命令自动使用镜像 + 同步版本 ==========
+// 兼容 Gradle 9.5（distributionUrl 为 String）和 9.6+（为 Provider<String>）
 allprojects {
     tasks.withType(Wrapper).configureEach {
-        def raw = distributionUrl.get()
+        def raw = distributionUrl
+        if (raw instanceof org.gradle.api.provider.Provider) {
+            raw = raw.get()
+        }
         def updated = raw
             .replace(GRADLE_DIST_ORIGINAL, GRADLE_DIST_MIRROR_PRIMARY)
 
