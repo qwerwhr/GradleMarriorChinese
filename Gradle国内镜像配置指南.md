@@ -153,26 +153,35 @@ def upgradeVersion = { String url ->
     return "${GRADLE_DIST_MIRROR_PRIMARY}gradle-${CURRENT_VERSION}${type}"
 }
 
-// ========== 1. gradle wrapper 命令自动使用镜像 + 同步版本 ==========
-// 兼容 Gradle 9.5（distributionUrl 为 String）和 9.6+（为 Provider<String>）
-allprojects {
-    tasks.withType(Wrapper).configureEach {
-        def raw = distributionUrl
-        if (raw instanceof org.gradle.api.provider.Provider) {
-            raw = raw.get()
-        }
-        def updated = raw
-            .replace(GRADLE_DIST_ORIGINAL, GRADLE_DIST_MIRROR_PRIMARY)
+// ========== 1. 拦截 gradle wrapper 命令（doFirst 保证最后执行，不被覆盖）==========
+gradle.rootProject {
+    tasks.withType(Wrapper).configureEach { task ->
+        task.doFirst {
+            def url = task.distributionUrl
+            if (url instanceof org.gradle.api.provider.Provider) {
+                url = url.get()
+            }
+            url = url.toString()
 
-        // 提取版本号，与系统版本比较，不一致则升级
-        def matcher = (updated =~ /gradle-(\d+\.\d+(?:\.\d+)?)/)
-        if (matcher.find()) {
-            def urlVersion = matcher.group(1)
-            if (urlVersion != CURRENT_VERSION) {
-                updated = upgradeVersion(updated)
+            // 1a. 替换为阿里云镜像域名
+            def replaced = url.replace(GRADLE_DIST_ORIGINAL, GRADLE_DIST_MIRROR_PRIMARY)
+
+            // 1b. 版本号：如果与当前系统版本不一致则升级
+            def m = (replaced =~ /gradle-(\d+\.\d+(?:\.\d+)?)/)
+            if (m.find()) {
+                def urlVersion = m.group(1)
+                if (urlVersion != CURRENT_VERSION) {
+                    def type = replaced.contains('-all.zip') ? '-all.zip' : '-bin.zip'
+                    replaced = "${GRADLE_DIST_MIRROR_PRIMARY}gradle-${CURRENT_VERSION}${type}"
+                    logger.lifecycle('[镜像] wrapper 版本升级: {} → {}', urlVersion, CURRENT_VERSION)
+                }
+            }
+
+            if (replaced != url) {
+                task.distributionUrl = replaced
+                logger.lifecycle('[镜像] wrapper → 阿里云镜像, gradle-{}', CURRENT_VERSION)
             }
         }
-        distributionUrl = updated
     }
 }
 
