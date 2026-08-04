@@ -18,5 +18,31 @@ BUILD SUCCESSFUL in 500ms<br><br>
 
 至此，以后可无需修改项目上和系统上的问题，可以创建新的项目，也可以达到此效果<br><br>
 <img width="505" height="226" alt="image" src="https://github.com/user-attachments/assets/6c4cddbb-e0dc-4d77-9d8f-4bf5b401a4be" /><br><br>
+<img width="1720" height="334" alt="image" src="https://github.com/user-attachments/assets/15ed69ac-6c49-4bcd-bf00-0991f491fdb1" /><br><br>
+<img width="1709" height="461" alt="image" src="https://github.com/user-attachments/assets/9ec519b8-ce9b-4e21-87fe-11cd8a1772af" /><br><br>
+<--------------------------------------------分界线---------------------------------------><br><br>
+Gradle 9.5.0 is not the latest minor version.<br><br>
+
+我们建议升级到 Gradle 版本 9.6.1。<br><br>
+
+可能的解决方案:<br><br>
+ - 升级到 Gradle 9.6.1 并重新同步<br><br>
+ - Edit inspection settings<br><br>
+
+<--------------------------------------------分界线---------------------------------------><br><br>
+[镜像] 已自动修复 wrapper → 阿里云镜像, gradle-9.5.0<br><br>
+> Task :prepareKotlinBuildScriptModel UP-TO-DATE<br><br>
+
+[Incubating] Problems report is available at: file:///D:/Downloads/Download/Project/java/MyApplication1/build/reports/problems/problems-report.html<br><br>
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.<br><br>
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.<br><br>
+
+For more on this, please refer to https://docs.gradle.org/9.5.0/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.<br><br>
+
+BUILD SUCCESSFUL in 1s<br><br>
+<--------------------------------------------分界线---------------------------------------><br><br>
+
 
 当出现错误时，可点击上面同步那里，然后再Sync Now即可<br><br>
