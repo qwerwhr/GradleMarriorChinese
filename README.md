@@ -15,3 +15,8 @@ You can use '--warning-mode all' to show the individual deprecation warnings and
 For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.<br><br>
 
 BUILD SUCCESSFUL in 500ms<br><br>
+
+至此，以后可无需修改项目上和系统上的问题，可以创建新的项目，也可以达到此效果<br><br>
+<img width="505" height="226" alt="image" src="https://github.com/user-attachments/assets/6c4cddbb-e0dc-4d77-9d8f-4bf5b401a4be" /><br><br>
+
+当出现错误时，可点击上面同步那里，然后再Sync Now即可<br><br>
