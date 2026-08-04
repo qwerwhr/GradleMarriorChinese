@@ -131,55 +131,64 @@ allprojects { project ->
 //
 // 核心机制：
 //   GradleVersion.current().version  ← Gradle 内置 API，自动获取当前运行的版本号
-//   无需手动改版本号，升级系统 Gradle 后所有项目自动跟随
 //
 // 效果：
 //   1. services.gradle.org → mirrors.aliyun.com（域名替换）
-//   2. gradle-9.5.0-bin.zip → gradle-9.6.1-bin.zip（版本自动升级，保留类型）
-//   3. gradle wrapper 命令 + 首次构建均生效
+//   2. gradle-9.5.0-bin.zip → gradle-9.6.1-bin.zip（版本自动升级）
+//   3. doFirst 执行前拦截 + doLast 执行后修复生成文件，双保险
 // ============================================================
 
-// 国内镜像地址
 def GRADLE_DIST_MIRROR_PRIMARY   = 'https://mirrors.aliyun.com/gradle/distributions/'
-def GRADLE_DIST_MIRROR_FALLBACK  = 'https://mirrors.tuna.tsinghua.edu.cn/gradle/distributions/'
 def GRADLE_DIST_ORIGINAL         = 'https://services.gradle.org/distributions/'
+def CURRENT_VERSION              = GradleVersion.current().version
 
-// ★ 关键：自动获取当前系统 Gradle 版本，不是硬编码
-def CURRENT_VERSION = GradleVersion.current().version
+println "[镜像] wrapper-mirror.gradle 已加载 (系统 Gradle: ${CURRENT_VERSION})"
 
-// 版本升级函数：保持 bin/all 类型，仅替换版本号
-def upgradeVersion = { String url ->
-    def type = (url.contains('-all.zip')) ? '-all.zip' : '-bin.zip'
-    return "${GRADLE_DIST_MIRROR_PRIMARY}gradle-${CURRENT_VERSION}${type}"
+// 公共：修复 distributionUrl（域名替换 + 版本升级）
+// try-catch 兼容 String 和 Provider，避免 init script 类加载问题
+def fixUrl = { raw ->
+    def url
+    try { url = raw.get() } catch (Exception _) { url = raw }
+    url = url.toString()
+
+    // 域名替换
+    url = url.replace(GRADLE_DIST_ORIGINAL, GRADLE_DIST_MIRROR_PRIMARY)
+
+    // 版本升级
+    def m = (url =~ /gradle-(\d+\.\d+(?:\.\d+)?)/)
+    if (m.find() && m.group(1) != CURRENT_VERSION) {
+        def type = url.contains('-all.zip') ? '-all.zip' : '-bin.zip'
+        url = "${GRADLE_DIST_MIRROR_PRIMARY}gradle-${CURRENT_VERSION}${type}"
+        println "[镜像] wrapper 版本升级: ${m.group(1)} → ${CURRENT_VERSION}"
+    }
+    return url
 }
 
-// ========== 1. 拦截 gradle wrapper 命令（doFirst 保证最后执行，不被覆盖）==========
+// ========== 1. 拦截 gradle wrapper（doFirst + doLast 双保险）==========
 gradle.rootProject {
     tasks.withType(Wrapper).configureEach { task ->
+        // 执行前：改 URL，防止下载走外网
         task.doFirst {
-            def url = task.distributionUrl
-            if (url instanceof org.gradle.api.provider.Provider) {
-                url = url.get()
+            def oldUrl = task.distributionUrl.toString()
+            def newUrl = fixUrl(oldUrl)
+            if (newUrl != oldUrl) {
+                task.setDistributionUrl(newUrl)
+                println "[镜像] wrapper → 阿里云镜像, gradle-${CURRENT_VERSION}"
             }
-            url = url.toString()
-
-            // 1a. 替换为阿里云镜像域名
-            def replaced = url.replace(GRADLE_DIST_ORIGINAL, GRADLE_DIST_MIRROR_PRIMARY)
-
-            // 1b. 版本号：如果与当前系统版本不一致则升级
-            def m = (replaced =~ /gradle-(\d+\.\d+(?:\.\d+)?)/)
-            if (m.find()) {
-                def urlVersion = m.group(1)
-                if (urlVersion != CURRENT_VERSION) {
-                    def type = replaced.contains('-all.zip') ? '-all.zip' : '-bin.zip'
-                    replaced = "${GRADLE_DIST_MIRROR_PRIMARY}gradle-${CURRENT_VERSION}${type}"
-                    logger.lifecycle('[镜像] wrapper 版本升级: {} → {}', urlVersion, CURRENT_VERSION)
+        }
+        // 执行后：修复生成的 gradle-wrapper.properties（兜底）
+        task.doLast {
+            def propsFile = project.file('gradle/wrapper/gradle-wrapper.properties')
+            if (propsFile.exists()) {
+                def props = new java.util.Properties()
+                propsFile.withInputStream { props.load(it) }
+                def url = props.getProperty('distributionUrl', '')
+                if (!url || url.contains('services.gradle.org')) {
+                    def fixed = fixUrl(url ?: "${GRADLE_DIST_ORIGINAL}gradle-${CURRENT_VERSION}-bin.zip")
+                    props.setProperty('distributionUrl', fixed.replace('https://', 'https\\://'))
+                    propsFile.withOutputStream { props.store(it, null) }
+                    println "[镜像] wrapper 生成文件已修复 → 阿里云镜像"
                 }
-            }
-
-            if (replaced != url) {
-                task.distributionUrl = replaced
-                logger.lifecycle('[镜像] wrapper → 阿里云镜像, gradle-{}', CURRENT_VERSION)
             }
         }
     }
@@ -194,36 +203,12 @@ gradle.rootProject { project ->
         def url = props.getProperty('distributionUrl', '')
         if (!url) return
 
-        def newUrl = url
-        def changed = false
-
-        // 2a. 替换为镜像域名
-        if (newUrl.contains('services.gradle.org')) {
-            newUrl = newUrl.replace(
-                'https\\://services.gradle.org/distributions/',
-                'https\\://mirrors.aliyun.com/gradle/distributions/'
-            )
-            changed = true
-        }
-
-        // 2b. 版本号自动升级
-        def versionMatcher = (newUrl =~ /gradle-(\d+\.\d+(?:\.\d+)?)/)
-        if (versionMatcher.find()) {
-            def oldVersion = versionMatcher.group(1)
-            if (oldVersion != CURRENT_VERSION) {
-                newUrl = upgradeVersion(newUrl)
-                changed = true
-                logger.lifecycle(
-                    '[镜像] Wrapper 版本升级: {} → {} (项目: {})',
-                    oldVersion, CURRENT_VERSION, project.name
-                )
-            }
-        }
-
-        if (changed) {
+        def newUrl = fixUrl(url)
+        if (newUrl != url) {
+            newUrl = newUrl.replace('https://', 'https\\://')
             props.setProperty('distributionUrl', newUrl)
             wrapperPropsFile.withOutputStream { props.store(it, null) }
-            logger.lifecycle('[镜像] Wrapper 已修复: gradle-{}, 阿里云镜像', CURRENT_VERSION)
+            println "[镜像] wrapper.properties 已修复 → 阿里云镜像, gradle-${CURRENT_VERSION}"
         }
     }
 }
