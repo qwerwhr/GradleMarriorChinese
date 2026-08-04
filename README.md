@@ -1,3 +1,4 @@
+<h1>第一种方式</h1><br><br>
 建议直接把这个md文档喂给智能体，如openclaw，workbuddy，codebuddy，qclaw等让它们来处理，首先要配置你的Gradle环境变量，其次要把Gradle的安装路径给它，<br><br>
 这个是当你的Android Studio创建新的项目时，会处理你的系统级和项目级的冲突问题，镜像源我只给了清华源和阿里云源，当项目级和系统级的源配置<br><br>
 冲突时，会进行替换为系统级的源，匹配你的gradle的版本，同步修改项目上的版本，将其保持一致<br><br>
@@ -46,3 +47,9 @@ BUILD SUCCESSFUL in 1s<br><br>
 
 
 当出现错误时，可点击上面同步那里，然后再Sync Now即可<br><br>
+
+
+
+<h1>第二种方式</h1><br><br>
+将mirrors.gradle这个放在gradle安装路径下的init.d文件夹下，另复制一份粘贴在C:\Users\{你电脑的名字}\.gradle\init.d下面<br><br>
+把这个wrapper-mirror.gradle放在C:\Users\{你电脑的名字}\.gradle\init.d下面<br><br>
